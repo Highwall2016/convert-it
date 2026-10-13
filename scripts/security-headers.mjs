@@ -29,9 +29,14 @@
 // (the bucket already allows it), so nothing needs a CORP header.
 
 import { createHash } from 'node:crypto';
+import nextEnv from '@next/env';
+const { loadEnvConfig } = nextEnv;
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+// Pages build variables may be absent in Git-connected projects. Read the
+// committed public production env consistently across Next and postbuild.
+loadEnvConfig(process.cwd(), false);
 const OUT = join(process.cwd(), 'out');
 
 function originOf(name) {

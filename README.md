@@ -1,6 +1,6 @@
 # Convert-it — Universal File Converter
 
-**[Live Demo → convert-it.oilygold.xyz](https://convert-it.oilygold.xyz)**
+**Hardened Fork — deployment gated by security verification.**
 
 A bold, modern web app for converting files between popular formats — entirely in the browser. Your files never leave your device: no uploads, no accounts.
 
@@ -81,7 +81,7 @@ To deploy by hand, build with `NEXT_PUBLIC_FFMPEG_BASE_URL` set — it is inline
 time, and a build without it ships an app whose audio/video conversion throws:
 
 ```bash
-NEXT_PUBLIC_FFMPEG_BASE_URL=https://cdn.oilygold.xyz/ffmpeg-core/0.12.10 npm run build
+NEXT_PUBLIC_FFMPEG_BASE_URL=https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10 npm run build
 npx wrangler pages deploy out --project-name convert-it --branch main
 ```
 
@@ -109,17 +109,17 @@ both a single point of failure and an unsigned-wasm supply-chain risk. To reprov
 
 ```bash
 npm install --no-save @ffmpeg/core@0.12.10
-npx wrangler r2 bucket create convert-it-assets
-npx wrangler r2 object put convert-it-assets/ffmpeg-core/0.12.10/ffmpeg-core.js --file node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js --content-type text/javascript --remote
-npx wrangler r2 object put convert-it-assets/ffmpeg-core/0.12.10/ffmpeg-core.wasm --file node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.wasm --content-type application/wasm --remote
-npx wrangler r2 bucket cors set convert-it-assets --file r2-cors.json
+npx wrangler r2 bucket create convert-it-assets-highwall
+npx wrangler r2 object put convert-it-assets-highwall/ffmpeg-core/0.12.10/ffmpeg-core.js --file node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js --content-type text/javascript --remote
+npx wrangler r2 object put convert-it-assets-highwall/ffmpeg-core/0.12.10/ffmpeg-core.wasm --file node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.wasm --content-type application/wasm --remote
+npx wrangler r2 bucket cors set convert-it-assets-highwall --file r2-cors.json
 ```
 
 Then attach a custom domain — the `*.r2.dev` URL is rate-limited and unsuitable for
 production. The zone ID is on the Cloudflare dashboard under the zone's Overview tab:
 
 ```bash
-npx wrangler r2 bucket domain add convert-it-assets --domain cdn.oilygold.xyz --zone-id <zone-id>
+npx wrangler r2 bucket domain add convert-it-assets-highwall --domain convert-assets.highwall-lab.us.ci --zone-id <zone-id>
 ```
 
 Finally point `NEXT_PUBLIC_FFMPEG_BASE_URL` at the new domain in [`ci.yml`](.github/workflows/ci.yml),
@@ -137,7 +137,7 @@ fails to load or crashes.
 To put it on the CDN, run the **Upload multi-threaded FFmpeg core** workflow
 ([`upload-ffmpeg-mt.yml`](.github/workflows/upload-ffmpeg-mt.yml)) once from the Actions tab.
 It checks the npm package against the hashes the app pins, uploads the three files to
-`convert-it-assets/ffmpeg-core-mt/0.12.10/` (their own directory, since the names clash with
+`convert-it-assets-highwall/ffmpeg-core-mt/0.12.10/` (their own directory, since the names clash with
 the single-threaded core's), and checks the CDN serves them. Its API token needs R2 edit
 permission as well as Pages.
 

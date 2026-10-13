@@ -1,18 +1,19 @@
 {
   "rules": [
     {
+      "id": "convert-it-browser-ffmpeg-read-only",
       "allowed": {
         "origins": [
-          "https://convert-it.oilygold.xyz",
-          "https://convert-it.pages.dev",
-          "https://*.convert-it.pages.dev",
-          "http://localhost:3000"
+          "https://convert.highwall-lab.us.ci",
+          "https://convert-it-8wh.pages.dev",
+          "http://localhost:3000",
+          "http://localhost:3100"
         ],
         "methods": ["GET", "HEAD"],
-        "headers": ["range"]
+        "headers": []
       },
-      "exposeHeaders": ["content-length", "content-range", "content-type"],
-      "maxAgeSeconds": 86400
+      "exposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+      "maxAgeSeconds": 3600
     }
   ]
 }

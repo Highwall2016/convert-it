@@ -2,9 +2,14 @@
 // out/offline-pack.json (what "Save for offline use" downloads, and its size).
 // Runs after security-headers.mjs, so the HTML it fingerprints is final.
 import { createHash } from 'node:crypto';
+import nextEnv from '@next/env';
+const { loadEnvConfig } = nextEnv;
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+// Pages build variables may be absent in Git-connected projects. Read the
+// committed public production env consistently across Next and postbuild.
+loadEnvConfig(process.cwd(), false);
 const OUT = join(process.cwd(), 'out');
 
 function walk(dir) {

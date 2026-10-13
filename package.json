@@ -2,18 +2,18 @@
   "name": "convert-it",
   "version": "0.1.0",
   "description": "Convert any file to any format, entirely in your browser.",
-  "homepage": "https://convert-it.oilygold.xyz",
+  "homepage": "https://convert-it-8wh.pages.dev/",
   "repository": {
-    "url": "https://github.com/acchuang/convert-it"
+    "url": "https://github.com/Highwall2016/convert-it"
   },
   "bugs": {
-    "url": "https://github.com/acchuang/convert-it/issues"
+    "url": "https://github.com/Highwall2016/convert-it/pulls"
   },
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "node scripts/security-headers.mjs && node scripts/build-sw.mjs",
+    "postbuild": "node scripts/security-headers.mjs && node scripts/build-sw.mjs && node scripts/check-build-config.mjs",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
@@ -26,7 +26,8 @@
     "copy-wasm": "node scripts/copy-wasm.mjs",
     "serve": "node scripts/serve-out.mjs",
     "icons": "node scripts/build-icons.mjs",
-    "test:security-egress": "node scripts/security-egress-smoke.mjs"
+    "test:security-egress": "node scripts/security-egress-smoke.mjs",
+    "test:access": "node scripts/access-gate-smoke.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -38,6 +39,7 @@
     "@jsquash/oxipng": "^2.3.0",
     "@jsquash/png": "^3.1.1",
     "@jsquash/webp": "^1.5.0",
+    "@next/env": "15.5.27",
     "@resvg/resvg-wasm": "^2.6.2",
     "@types/jszip": "^3.4.0",
     "exifr": "7.1.3",

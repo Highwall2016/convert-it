@@ -49,17 +49,47 @@ export async function sha256Hex(data: ArrayBuffer): Promise<string> {
  * so what runs is exactly what was checked; there is no second fetch that
  * could return something else.
  */
+// Immutable hash-pinned assets can be fetched again after transient network
+// errors. Do not retry 4xx (except 429), and never retry an integrity mismatch.
+const TRANSIENT_HTTP = new Set([429, 500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [250, 750];
+
+class TransientCoreFetchError extends Error {}
+
+/** Retrieve an executable core asset, retrying transient network/read errors. */
+export async function fetchCoreBytesWithRetry(url: string): Promise<ArrayBuffer> {
+  const filename = new URL(url).pathname.split('/').pop() || 'FFmpeg core';
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const message = filename + ': HTTP ' + res.status;
+        if (TRANSIENT_HTTP.has(res.status)) throw new TransientCoreFetchError(message);
+        throw new Error(message);
+      }
+      return await res.arrayBuffer();
+    } catch (err) {
+      if (
+        attempt === RETRY_DELAYS_MS.length ||
+        !(err instanceof TypeError || err instanceof TransientCoreFetchError)
+      ) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+  throw new Error(filename + ': exhausted retry attempts');
+}
+
 async function verifiedBlobUrl(
   base: string,
   name: string,
   expected: string,
   type: string,
 ): Promise<string> {
-  const res = await fetch(`${base}/${name}`);
-  if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
-  const data = await res.arrayBuffer();
+  const data = await fetchCoreBytesWithRetry(base + '/' + name);
   if ((await sha256Hex(data)) !== expected) {
-    throw new Error(`${name} failed its integrity check — refusing to run it`);
+    throw new Error(name + ' failed its integrity check — refusing to run it');
   }
   return URL.createObjectURL(new Blob([data], { type }));
 }

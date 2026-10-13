@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, security/harden-file-converters, feat/cloudflare-owned-ffmpeg]
 
 permissions:
   contents: read
@@ -26,6 +26,11 @@ jobs:
       - run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      # Detect accidental public exposure of the site or historic deployment
+      # URLs. No credentials: every anonymous request must hit Access first.
+      - name: Verify owner-only Cloudflare Access gate
+        run: npm run test:access
 
       - run: npm run typecheck
 
@@ -54,6 +59,11 @@ jobs:
       # the user's browser. Dev tooling advisories are handled by Dependabot.
       - run: npm audit --omit=dev --audit-level=high
 
+      # Do not trust a CDN response without the repo-pinned SHA-256.
+      # This also catches incorrect CORS and content-type before any build.
+      - name: Verify owner-controlled FFmpeg R2 CDN
+        run: node scripts/check-ffmpeg-st.mjs https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10
+
       # The multi-threaded core (2–3x faster video on 4+ cores) is turned on
       # only once it's on the CDN, with CORS for the site and the pinned hashes
       # (the "Upload multi-threaded FFmpeg core" workflow puts it there). Then
@@ -61,7 +71,7 @@ jobs:
       # Set after the unit tests, which must not see it.
       - name: Use the multi-threaded FFmpeg core if it's on the CDN
         run: |
-          MT=https://cdn.oilygold.xyz/ffmpeg-core-mt/0.12.10
+          MT=https://convert-assets.highwall-lab.us.ci/ffmpeg-core-mt/0.12.10
           if node scripts/check-ffmpeg-mt.mjs "$MT"; then
             echo "NEXT_PUBLIC_FFMPEG_MT_BASE_URL=$MT" >> "$GITHUB_ENV"
             echo "SMOKE_EXPECT_MT=1" >> "$GITHUB_ENV"
@@ -76,7 +86,7 @@ jobs:
       # unit tests must run without it (they would otherwise hit the real CDN).
       - run: npm run build
         env:
-          NEXT_PUBLIC_FFMPEG_BASE_URL: https://cdn.oilygold.xyz/ffmpeg-core/0.12.10
+          NEXT_PUBLIC_FFMPEG_BASE_URL: https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10
 
       # Real codecs in a real browser against the built site with its _headers
       # applied. Checks the downloaded bytes, and fails on any CSP violation.
@@ -88,6 +98,8 @@ jobs:
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
           node scripts/smoke.mjs
+          # A temporary R2 failure must recover without executing unverified code.
+          node scripts/ffmpeg-retry-smoke.mjs
           # Fail if a real browser observes unexpected outbound network requests.
           node scripts/security-egress-smoke.mjs
           # axe-core (WCAG 2.1 AA) on every page and interactive state, both
@@ -97,12 +109,41 @@ jobs:
           # which it stops to go offline for real.
           node scripts/offline-smoke.mjs
 
-      # The Pages project is direct-upload (no Git integration), so main is
-      # deployed from the artifact this job just built and verified.
-      - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_CLOUDFLARE_DEPLOY == 'true'
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+      # Cloudflare Pages Git integration builds the reviewed staging branch.
+      # Do not deploy this same build through a second credential-bearing CI path.
+
+  # Browser differences are a security issue for a local-only file converter:
+  # native codec selection, WebAssembly workers, CSP and memory handling vary.
+  # Keep independent Linux WebKit/Firefox checks for each PR, not just local Mac.
+  cross-browser-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name convert-it --branch main
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Install Firefox and WebKit with Linux dependencies
+        run: npx playwright install --with-deps firefox webkit
+      - name: Build the exact PR commit
+        run: |
+          npm run fixtures
+          npm run build
+      - name: Cross-browser conversion and malicious-file checks
+        # Access protects the real Pages URL; exercise the isolated PR build
+        # locally, and verify Pages authentication separately above.
+        env:
+          SMOKE_URL: http://localhost:3000
+        run: |
+          node scripts/serve-out.mjs 3000 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
+          node scripts/cross-browser-security-smoke.mjs firefox
+          node scripts/cross-browser-security-smoke.mjs webkit
+          node scripts/browser-adversarial-smoke.mjs firefox
+          node scripts/browser-adversarial-smoke.mjs webkit
+          # Fault injection must recover across browser engines, not only Chrome.
+          node scripts/ffmpeg-retry-smoke.mjs firefox
+          node scripts/ffmpeg-retry-smoke.mjs webkit
