@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ORIGIN = 'https://convert-it.oilygold.xyz';
+const ORIGIN = process.env.CONVERT_IT_ORIGIN ?? 'https://convert-it.pages.dev';
 const base = process.argv[2];
 if (!base) {
   console.error('usage: check-ffmpeg-mt.mjs <dir | url>');

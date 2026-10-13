@@ -15,8 +15,8 @@ permissions:
 
 env:
   VERSION: 0.12.10
-  BUCKET: convert-it-assets
-  CDN: https://cdn.oilygold.xyz
+  BUCKET: convert-it-assets-highwall
+  CDN: https://convert-assets.highwall-lab.us.ci
 
 jobs:
   upload:

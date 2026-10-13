@@ -54,6 +54,11 @@ jobs:
       # the user's browser. Dev tooling advisories are handled by Dependabot.
       - run: npm audit --omit=dev --audit-level=high
 
+      # Do not trust a CDN response without the repo-pinned SHA-256.
+      # This also catches incorrect CORS and content-type before any build.
+      - name: Verify owner-controlled FFmpeg R2 CDN
+        run: node scripts/check-ffmpeg-st.mjs https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10
+
       # The multi-threaded core (2–3x faster video on 4+ cores) is turned on
       # only once it's on the CDN, with CORS for the site and the pinned hashes
       # (the "Upload multi-threaded FFmpeg core" workflow puts it there). Then
@@ -61,7 +66,7 @@ jobs:
       # Set after the unit tests, which must not see it.
       - name: Use the multi-threaded FFmpeg core if it's on the CDN
         run: |
-          MT=https://cdn.oilygold.xyz/ffmpeg-core-mt/0.12.10
+          MT=https://convert-assets.highwall-lab.us.ci/ffmpeg-core-mt/0.12.10
           if node scripts/check-ffmpeg-mt.mjs "$MT"; then
             echo "NEXT_PUBLIC_FFMPEG_MT_BASE_URL=$MT" >> "$GITHUB_ENV"
             echo "SMOKE_EXPECT_MT=1" >> "$GITHUB_ENV"
@@ -76,7 +81,7 @@ jobs:
       # unit tests must run without it (they would otherwise hit the real CDN).
       - run: npm run build
         env:
-          NEXT_PUBLIC_FFMPEG_BASE_URL: https://cdn.oilygold.xyz/ffmpeg-core/0.12.10
+          NEXT_PUBLIC_FFMPEG_BASE_URL: https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10
 
       # Real codecs in a real browser against the built site with its _headers
       # applied. Checks the downloaded bytes, and fails on any CSP violation.
