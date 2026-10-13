@@ -99,9 +99,6 @@
   "overrides": {
     "next": {
       "postcss": "^8.5.28"
-    },
-    "mammoth": {
-      "argparse": "^2.0.1"
     }
   }
 }

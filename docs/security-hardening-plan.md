@@ -22,7 +22,7 @@ Deployment default: **disabled** until Cloudflare assets, secrets and network eg
 | P0 / code          | XSS in generated HTML              | Sanitize Markdown and Mammoth DOCX HTML and attach restrictive CSP to exported artifact | Malicious Markdown / image / URL test      | No script/event handler/remote image                    |
 | P0 / code          | EPUB CSS tracking                  | Remove arbitrary inline style from EPUB body                                            | Crafted remote url() styles                | No remote CSS URLs in output                            |
 | P0 / code          | Abandoned PWA shares               | Limit file number/bytes, short TTL, cleanup on reuse                                    | Code tests and PWA E2E                     | Max 10 files and 50 MiB, expire after 15 minutes        |
-| P0 / supply chain  | High/Critical advisories           | Update/override vulnerable packages; record unfixable moderate findings                 | `npm audit --omit=dev --audit-level=high`  | 0 high/critical                                         |
+| P0 / supply chain  | High/Critical advisories           | Update vulnerable packages; document remaining moderate findings                        | `npm audit --omit=dev --audit-level=high`  | 0 high/critical                                         |
 | P0 / CI            | Mutable Actions / deployment token | Pin Actions commit SHA; least-privilege workflow; explicit deployment opt-in            | Workflow lint, GitHub Actions              | No uncontrolled deployment from fork                    |
 | P0 / privacy       | Hidden outbound network traffic    | Browser canary capture with request inspection and CSP assertions                       | `security-egress-smoke.mjs`                | No observed remote request or canary egress             |
 | P1 / deployment    | Depends on upstream FFmpeg CDN     | Copy verified FFmpeg ST/MT assets to user-owned Cloudflare R2 and restrict CORS         | SHA-256 + CORS + origin validation         | All executable assets under owned origins               |
@@ -79,11 +79,29 @@ Deployment default: **disabled** until Cloudflare assets, secrets and network eg
 - Run live smoke against the deployed URL, record exact commit and asset digests.
 - Roll back Cloudflare Pages to a known-good prior release on failed smoke; revoke CDN access on integrity violation.
 
-## Current verification log
+## Current verification log (2026-10-13)
 
-Actual results belong in the PR and CI logs. A passing unit test is **not** an independent
-penetration test; the final deployment gate remains closed until a live Cloudflare
-instance, owned assets and a cross-browser run have been verified.
+| Check                                | Result                | Evidence                                                                  |
+| ------------------------------------ | --------------------- | ------------------------------------------------------------------------- |
+| TypeScript / lint / Prettier         | PASS                  | Local `npm run typecheck`, `npm run lint`, `npx prettier --check .`       |
+| Unit/integration tests, Node.js 20   | PASS                  | 875 passed, 1 skipped across 57 test files                                |
+| Dependency audit                     | PASS with residuals   | 0 High/Critical; 3 Moderate via Mammoth > Argparse > Sprintf              |
+| WASM package matching                | PASS                  | 23 committed WASM/OCR files match installed packages                      |
+| Static production build              | PASS                  | 374 generated pages with CSP meta + header                                |
+| Real Chrome format smoke             | PASS                  | 45/45 representative engine and format paths; actual output bytes checked |
+| Real Chrome network-canary test      | PASS                  | No observed remote request and no canary egress for Markdown → HTML       |
+| axe WCAG 2.1 AA (dark + light)       | PASS                  | 14/14 after light-muted contrast correction                               |
+| Offline PWA/share target             | PASS                  | 15/15, including rejecting an 11-file share                               |
+| Fork GitHub Actions                  | Pending latest commit | CI provides independently reproducible runner logs                        |
+| Owner-controlled Cloudflare Pages/R2 | NOT STARTED           | Must be provisioned before production deployment                          |
+| Safari/Firefox/fuzz campaigns        | NOT STARTED           | P1/P2 release qualification                                               |
+
+Node.js 26 exposes a localStorage test-environment incompatibility in this project's
+jsdom suite; the same suite passes in Node.js 20, which the upstream CI uses.
+
+A passing test is **not** an independent penetration test; the production deployment
+gate stays closed until a live Cloudflare instance, owned assets and a cross-browser
+run have been verified.
 
 ## Residual risk to disclose
 
