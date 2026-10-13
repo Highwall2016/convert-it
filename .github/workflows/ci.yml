@@ -133,6 +133,10 @@ jobs:
           npm run fixtures
           npm run build
       - name: Cross-browser conversion and malicious-file checks
+        # Access protects the real Pages URL; exercise the isolated PR build
+        # locally, and verify Pages authentication separately above.
+        env:
+          SMOKE_URL: http://localhost:3000
         run: |
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done

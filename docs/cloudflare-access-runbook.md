@@ -73,3 +73,13 @@ The owner should sign in successfully using email OTP, then verify real
 conversions, offline/PWA expectations and logout behavior. Keep the static
 site's previously established security and integrity gates. Require GitHub PR
 checks for all source updates and avoid force pushes to production.
+
+## CI separation
+
+The cross-browser functional and malicious-file suites must set
+`SMOKE_URL=http://localhost:3000` because the public Cloudflare Pages URL
+correctly redirects anonymous CI visitors to the Access login page. The
+independent `test:access` job deliberately tests the public Pages host
+**without credentials**, and must receive HTTP 302 for every path. This
+prevents a false green run against a login page or a false functional
+failure due to expected authentication.
