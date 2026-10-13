@@ -40,3 +40,19 @@ The check fetches objects via HTTPS, asserts their SHA-256 and verifies R2 CORS 
 - Validate staging Pages output, CSP, CORS, browser egress and offline PWA before assigning the production custom domain.
 - Pages now uses native Git integration, with production_branch=feat/cloudflare-owned-ffmpeg only for staging. The former GitHub token-based deployment step is removed, preventing duplicate release channels. Use reviewed main after merging both security PRs.
 - Restrict production deployments to reviewed, CI-passing commits, and retain rollback procedure.
+
+## Cloudflare Pages build reproducibility
+
+Cloudflare Pages Git integration may not expose the project-defined build variables
+to the Git builder (a first build logged `Build environment variables: (none found)`).
+This fork therefore commits **only a public CDN URL** in `.env.production`, and the
+Node post-build header/PWA generators explicitly load it with `@next/env`.
+`scripts/check-build-config.mjs` runs as part of `npm run postbuild` and
+**fails the build** unless the emitted JS, Service Worker and CSP all contain
+the exact owned R2 origin. Do not put secrets in `.env.production`.
+
+The Pages project uses native Git integration; previews are disabled and the
+temporary production branch is `feat/cloudflare-owned-ffmpeg` while testing.
+Do not bind the human-facing custom domain until live E2E, egress and CSP
+checks pass, and switch the protected production branch to `main` only after
+the hardened security PRs have been reviewed and merged.
