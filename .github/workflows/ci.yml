@@ -27,6 +27,11 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
+      # Detect accidental public exposure of the site or historic deployment
+      # URLs. No credentials: every anonymous request must hit Access first.
+      - name: Verify owner-only Cloudflare Access gate
+        run: npm run test:access
+
       - run: npm run typecheck
 
       - run: npm run lint
@@ -128,6 +133,10 @@ jobs:
           npm run fixtures
           npm run build
       - name: Cross-browser conversion and malicious-file checks
+        # Access protects the real Pages URL; exercise the isolated PR build
+        # locally, and verify Pages authentication separately above.
+        env:
+          SMOKE_URL: http://localhost:3000
         run: |
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
