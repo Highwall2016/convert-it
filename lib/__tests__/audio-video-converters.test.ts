@@ -6,6 +6,7 @@ import {
   createLogWatcher,
   FFMPEG_CORE_SHA256,
   sha256Hex,
+  fetchCoreBytesWithRetry,
 } from '@/lib/audio-video-converters';
 import { DEFAULT_SETTINGS } from '@/lib/types';
 
@@ -149,6 +150,41 @@ describe('FFmpeg core integrity', () => {
     expect(await sha256Hex(data.buffer as ArrayBuffer)).toBe(
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     );
+  });
+});
+
+describe('FFmpeg network retry policy', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('retries a transient 503 and succeeds on a subsequent verified download', async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('test-core'));
+    vi.stubGlobal('fetch', fn);
+    const data = await fetchCoreBytesWithRetry('https://cdn.example/core/ffmpeg-core.js');
+    expect(new TextDecoder().decode(data)).toBe('test-core');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a transport TypeError but never downloads from a fallback host', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(new Response('test-core'));
+    vi.stubGlobal('fetch', fn);
+    await fetchCoreBytesWithRetry('https://cdn.example/core/ffmpeg-core.wasm');
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenCalledWith('https://cdn.example/core/ffmpeg-core.wasm');
+  });
+
+  it('does not retry an unrecoverable 404', async () => {
+    const fn = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+    vi.stubGlobal('fetch', fn);
+    await expect(
+      fetchCoreBytesWithRetry('https://cdn.example/core/ffmpeg-core.js'),
+    ).rejects.toThrow(/HTTP 404/);
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 });
 

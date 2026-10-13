@@ -65,6 +65,26 @@ document this transitive CLI-only exception, and replace or update the
 dependency when a tested and maintained fix becomes available. Do not apply
 an unsupported major-version npm override just to silence audit warnings.
 
+## FFmpeg network resilience / integrity (additional finding)
+
+GitHub Actions run 38382950006 passed Firefox/WebKit but the Chrome
+45-format suite produced **44/45**, with DTS -> FLAC reporting a generic
+'Could not load converter' (engine-load). The immediate follow-up run
+38383298114 completed **both CI jobs successfully**. The first failure was
+not attributed to the input file; its precise root cause is unconfirmed
+because the previous test harness only printed the localized UI title.
+
+The browser FFmpeg loader now retries **only transient network/read failures**
+(TypeError and HTTP 429/500/502/503/504) with 250 ms then 750 ms backoff,
+always to the **same owner-controlled R2 origin**. Permanent 4xx and any
+SHA-256 integrity mismatch are never retried: hostile code is never run.
+The Chrome E2E network fault-injection test deliberately aborts the first
+WASM fetch and validates that the second attempt produces a real MP4.
+Unit tests cover retryable 503, transport failure, and fail-fast 404.
+The Chrome 45-format CI step now records underlying engine detail and
+core/static network request failures when conversion fails, so any later
+recurrence can be investigated rather than silently treated as flaky.
+
 ## Outstanding release checks
 
 - Test on an actual iOS Safari and Android low-memory device.

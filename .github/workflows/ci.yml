@@ -93,6 +93,8 @@ jobs:
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
           node scripts/smoke.mjs
+          # A temporary R2 failure must recover without executing unverified code.
+          node scripts/ffmpeg-retry-smoke.mjs
           # Fail if a real browser observes unexpected outbound network requests.
           node scripts/security-egress-smoke.mjs
           # axe-core (WCAG 2.1 AA) on every page and interactive state, both
@@ -133,3 +135,6 @@ jobs:
           node scripts/cross-browser-security-smoke.mjs webkit
           node scripts/browser-adversarial-smoke.mjs firefox
           node scripts/browser-adversarial-smoke.mjs webkit
+          # Fault injection must recover across browser engines, not only Chrome.
+          node scripts/ffmpeg-retry-smoke.mjs firefox
+          node scripts/ffmpeg-retry-smoke.mjs webkit

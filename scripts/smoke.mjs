@@ -162,6 +162,22 @@ const engineOf = (label) =>
 for (const [fixture, target, label, check] of PAIRS) {
   const page = await browser.newPage({ locale: 'en-US' });
   const consoleErrors = [];
+  const networkErrors = [];
+  // Record failed core or lazy JS loads, not just the user-friendly error title.
+  // These details help distinguish a transient CDN issue from an engine crash.
+  page.context().on('requestfailed', (req) => {
+    if (req.url().includes('ffmpeg-core') || req.url().includes('/_next/static/')) {
+      networkErrors.push(req.url() + ': ' + (req.failure()?.errorText ?? 'request failed'));
+    }
+  });
+  page.context().on('response', (res) => {
+    if (
+      res.status() >= 400 &&
+      (res.url().includes('ffmpeg-core') || res.url().includes('/_next/static/'))
+    ) {
+      networkErrors.push('HTTP ' + res.status() + ' ' + res.url());
+    }
+  });
   page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
   // The loader warns when it gives up on the multi-threaded FFmpeg core.
   const mtFallbacks = [];
@@ -239,6 +255,13 @@ for (const [fixture, target, label, check] of PAIRS) {
           .catch(() => null)) ??
         consoleErrors[0] ??
         'conversion errored';
+      const detail = await page
+        .locator('[role="alert"] details code')
+        .first()
+        .textContent()
+        .catch(() => null);
+      if (detail) row.note += ' | detail: ' + detail.slice(0, 180);
+      if (networkErrors.length) row.note += ' | network: ' + networkErrors.slice(0, 2).join(' | ');
       results.push(row);
       await page.close();
       continue;
