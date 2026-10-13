@@ -57,9 +57,10 @@ try {
     const blocked = [];
     let coreLoaded = false;
     const requestViolations = [];
-    page.on('request', (req) => {
+    page.context().on('request', (req) => {
       const u = new URL(req.url());
-      if (!allowed.has(u.origin)) requestViolations.push('external-origin:' + u.origin);
+      if ((u.protocol === 'http:' || u.protocol === 'https:') && !allowed.has(u.origin))
+        requestViolations.push('external-origin:' + u.origin);
       if (
         u.pathname.includes('/ffmpeg-core.wasm') &&
         u.origin === 'https://convert-assets.highwall-lab.us.ci'

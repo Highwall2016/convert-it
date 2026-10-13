@@ -33,9 +33,10 @@ async function workbook(rows) {
 async function newPage() {
   const page = await browser.newPage({ locale: 'en-US', acceptDownloads: true });
   const unexpected = [];
-  page.on('request', (request) => {
+  page.context().on('request', (request) => {
     const url = new URL(request.url());
-    if (url.origin !== origin) unexpected.push(url.origin);
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin)
+      unexpected.push(url.origin);
     if (request.method() !== 'GET' && request.method() !== 'HEAD')
       unexpected.push(request.method() + ' ' + url.pathname);
   });

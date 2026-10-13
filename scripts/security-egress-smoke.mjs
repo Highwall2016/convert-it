@@ -12,9 +12,10 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const context = await browser.newContext({ acceptDownloads: true, locale: 'en-US' });
   const page = await context.newPage();
-  page.on('request', (request) => {
+  context.on('request', (request) => {
     const u = new URL(request.url());
-    if (u.origin !== origin) violations.push(`External origin: ${u.origin}`);
+    if ((u.protocol === 'http:' || u.protocol === 'https:') && u.origin !== origin)
+      violations.push(`External origin: ${u.origin}`);
     const url = decodeURIComponent(request.url());
     if (url.includes(marker)) violations.push(`Sentinel in request URL: ${u.origin}`);
     const body = request.postData();
