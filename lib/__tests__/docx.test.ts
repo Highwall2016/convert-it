@@ -47,7 +47,9 @@ describe('Markdown → DOCX, read back by mammoth', () => {
     expect(out).toContain('<h2>Findings</h2>');
     expect(out).toContain('<strong>bold</strong>');
     expect(out).toContain('<em>italic</em>');
-    expect(out).toContain('<a href="https://example.com/a?b=1&amp;c=2">link</a>');
+    expect(out).toContain(
+      '<a href="https://example.com/a?b=1&amp;c=2" rel="noopener noreferrer">link</a>',
+    );
   });
 
   it('bulleted, numbered and nested lists', async () => {

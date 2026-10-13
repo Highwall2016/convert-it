@@ -25,7 +25,8 @@
     "a11y": "node scripts/a11y-smoke.mjs",
     "copy-wasm": "node scripts/copy-wasm.mjs",
     "serve": "node scripts/serve-out.mjs",
-    "icons": "node scripts/build-icons.mjs"
+    "icons": "node scripts/build-icons.mjs",
+    "test:security-egress": "node scripts/security-egress-smoke.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -46,7 +47,7 @@
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "libheif-js": "^1.19.8",
-    "mammoth": "^1.12.3",
+    "mammoth": "1.13.0",
     "marked": "^18.0.14",
     "mediabunny": "1.59.1",
     "next": "^15.5.26",
@@ -54,6 +55,7 @@
     "pdf-lib": "1.17.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sanitize-html": "2.18.0",
     "tesseract.js": "^7.0.0",
     "turndown": "^7.2.4",
     "utif2": "^4.1.0",
@@ -77,6 +79,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "2.16.2",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.0",
@@ -96,6 +99,9 @@
   "overrides": {
     "next": {
       "postcss": "^8.5.28"
+    },
+    "mammoth": {
+      "argparse": "^2.0.1"
     }
   }
 }

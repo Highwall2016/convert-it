@@ -7,6 +7,7 @@
 import { pastedTextKind } from './paste';
 
 const SHARE_INBOX = 'share-inbox';
+const SHARE_TTL_MS = 15 * 60 * 1000;
 
 interface LaunchParams {
   files?: { getFile(): Promise<File> }[];
@@ -24,7 +25,12 @@ export async function takeSharedFiles(): Promise<File[]> {
   );
   const files: File[] = [];
   for (const request of requests) {
-    const response = await inbox.match(request);
+    const id = new URL(request.url).pathname.split('/').pop() ?? '';
+    const created = Number(id.split('-')[0]);
+    // A crashed or abandoned share must not remain as sensitive cached data.
+    const expired =
+      !Number.isFinite(created) || created <= 0 || Date.now() - created > SHARE_TTL_MS;
+    const response = expired ? null : await inbox.match(request);
     await inbox.delete(request);
     if (!response) continue;
     const blob = await response.blob();

@@ -26,8 +26,8 @@ const entry = (body: string, name: string, type: string): Response =>
 describe('takeSharedFiles', () => {
   it('returns the inbox oldest first, with names, and empties it', async () => {
     const { store, deleted } = fakeCaches([
-      ['/share-inbox/10-1', entry('b', 'b é.png', 'image/png')],
-      ['/share-inbox/9-0', entry('a', 'a.csv', 'text/csv')],
+      ['/share-inbox/' + (Date.now() - 1_000) + '-1', entry('b', 'b é.png', 'image/png')],
+      ['/share-inbox/' + (Date.now() - 2_000) + '-0', entry('a', 'a.csv', 'text/csv')],
     ]);
     const files = await takeSharedFiles();
     expect(files.map((f) => [f.name, f.type])).toEqual([
@@ -39,8 +39,21 @@ describe('takeSharedFiles', () => {
   });
 
   it('names shared text for what it is', async () => {
-    fakeCaches([['/share-inbox/1-0', entry('x\ty\n1\t2', 'shared.txt', 'text/plain')]]);
+    fakeCaches([
+      ['/share-inbox/' + Date.now() + '-0', entry('x\ty\n1\t2', 'shared.txt', 'text/plain')],
+    ]);
     expect((await takeSharedFiles())[0].name).toBe('shared.tsv');
+  });
+
+  it('discards a share abandoned beyond the 15-minute TTL', async () => {
+    const { store } = fakeCaches([
+      [
+        '/share-inbox/' + (Date.now() - 16 * 60_000) + '-0',
+        entry('sensitive', 'id.pdf', 'application/pdf'),
+      ],
+    ]);
+    expect(await takeSharedFiles()).toEqual([]);
+    expect(store.size).toBe(0);
   });
 
   it('no Cache API, nothing shared', async () => {
