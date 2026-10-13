@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, security/harden-file-converters]
+    branches: [main, security/harden-file-converters, feat/cloudflare-owned-ffmpeg]
 
 permissions:
   contents: read
@@ -93,6 +93,8 @@ jobs:
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
           node scripts/smoke.mjs
+          # A temporary R2 failure must recover without executing unverified code.
+          node scripts/ffmpeg-retry-smoke.mjs
           # Fail if a real browser observes unexpected outbound network requests.
           node scripts/security-egress-smoke.mjs
           # axe-core (WCAG 2.1 AA) on every page and interactive state, both
@@ -104,3 +106,35 @@ jobs:
 
       # Cloudflare Pages Git integration builds the reviewed staging branch.
       # Do not deploy this same build through a second credential-bearing CI path.
+
+  # Browser differences are a security issue for a local-only file converter:
+  # native codec selection, WebAssembly workers, CSP and memory handling vary.
+  # Keep independent Linux WebKit/Firefox checks for each PR, not just local Mac.
+  cross-browser-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Install Firefox and WebKit with Linux dependencies
+        run: npx playwright install --with-deps firefox webkit
+      - name: Build the exact PR commit
+        run: |
+          npm run fixtures
+          npm run build
+      - name: Cross-browser conversion and malicious-file checks
+        run: |
+          node scripts/serve-out.mjs 3000 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
+          node scripts/cross-browser-security-smoke.mjs firefox
+          node scripts/cross-browser-security-smoke.mjs webkit
+          node scripts/browser-adversarial-smoke.mjs firefox
+          node scripts/browser-adversarial-smoke.mjs webkit
+          # Fault injection must recover across browser engines, not only Chrome.
+          node scripts/ffmpeg-retry-smoke.mjs firefox
+          node scripts/ffmpeg-retry-smoke.mjs webkit
