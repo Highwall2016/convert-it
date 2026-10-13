@@ -58,7 +58,7 @@ const check = (name, actual, expected) => {
 await up();
 const browser = await chromium.launch(launch);
 try {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'en-US' });
   const csp = [];
   page.on('console', (m) => /Content Security Policy/i.test(m.text()) && csp.push(m.text()));
 
@@ -133,6 +133,16 @@ try {
   // Share sheet (installed app): the OS POSTs to /share-target, which only
   // the service worker answers (the server is down here, and a static host
   // has nothing there anyway); the page then collects the file on /?shared=1.
+  const oversizeStatus = await page.evaluate(async () => {
+    const form = new FormData();
+    for (let i = 0; i < 11; i++) {
+      form.append('files', new File(['x'], `extra-${i}.txt`, { type: 'text/plain' }));
+    }
+    const res = await fetch('/share-target', { method: 'POST', body: form });
+    return res.status;
+  });
+  check('share target: refuses more than 10 files', oversizeStatus, 413);
+
   const shared = await page.evaluate(async () => {
     const form = new FormData();
     form.append('files', new File(['a,b\n1,2\n'], 'shared-data.csv', { type: 'text/csv' }));

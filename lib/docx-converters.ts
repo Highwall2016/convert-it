@@ -9,6 +9,7 @@ import { markdownBlocks } from './markdown-blocks';
 import { renderPdf, textBlocks } from './pdf-layout';
 import { blocksToDocx } from './docx-writer';
 import { htmlStringToMarkdown } from './markdown-converters';
+import { safeHtmlDocument } from './safe-html';
 
 const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 
@@ -58,7 +59,7 @@ ${body}
 }
 
 export async function docxToHtml(file: File): Promise<Blob> {
-  return new Blob([page(stem(file.name), await docxHtml(file))], { type: 'text/html' });
+  return new Blob([safeHtmlDocument(stem(file.name), await docxHtml(file))], { type: 'text/html' });
 }
 
 export async function docxToTxt(file: File): Promise<Blob> {

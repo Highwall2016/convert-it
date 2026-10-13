@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: 'npm'
@@ -85,6 +88,8 @@ jobs:
           node scripts/serve-out.mjs 3000 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
           node scripts/smoke.mjs
+          # Fail if a real browser observes unexpected outbound network requests.
+          node scripts/security-egress-smoke.mjs
           # axe-core (WCAG 2.1 AA) on every page and interactive state, both
           # themes; serious or critical violations fail the build.
           node scripts/a11y-smoke.mjs
@@ -95,8 +100,8 @@ jobs:
       # The Pages project is direct-upload (no Git integration), so main is
       # deployed from the artifact this job just built and verified.
       - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: cloudflare/wrangler-action@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_CLOUDFLARE_DEPLOY == 'true'
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

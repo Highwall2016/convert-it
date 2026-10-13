@@ -246,7 +246,8 @@ const INLINE = new Set([
   'wbr',
 ]);
 
-const GLOBAL_ATTRS = new Set(['id', 'class', 'title', 'lang', 'dir', 'style']);
+// Avoid preserving arbitrary inline CSS: EPUB readers may fetch url() resources.
+const GLOBAL_ATTRS = new Set(['id', 'class', 'title', 'lang', 'dir']);
 const ELEMENT_ATTRS: Record<string, Set<string>> = {
   a: new Set(['href']),
   img: new Set(['src', 'alt', 'width', 'height']),

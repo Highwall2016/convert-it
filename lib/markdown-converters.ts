@@ -4,6 +4,7 @@ import TurndownService from 'turndown';
 import type { ConversionSettings } from './types';
 import { htmlToPlainText } from './html-text';
 import { escapeHtml } from './markup';
+import { safeHtmlDocument } from './safe-html';
 
 export function mdToHtml(
   file: File,
@@ -13,7 +14,7 @@ export function mdToHtml(
 ): Promise<Blob> {
   return file.text().then(async (text) => {
     const htmlBody = await marked.parse(text);
-    const html = `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n</head>\n<body>\n${htmlBody}\n</body>\n</html>`;
+    const html = safeHtmlDocument(file.name, htmlBody);
     return new Blob([html], { type: 'text/html' });
   });
 }

@@ -61,10 +61,67 @@ function stringItem(node: unknown): string {
   return '';
 }
 
-async function readXml(zip: JSZip, path: string): Promise<XmlNode | null> {
+// Enforce limits while decompressing. Checking File.size or waiting until
+// entry.async('string') finishes does not stop a tiny XLSX ZIP bomb.
+const MAX_XML_ENTRY_BYTES = 8 * 1024 * 1024;
+const MAX_XML_TOTAL_BYTES = 32 * 1024 * 1024;
+type XmlBudget = { remaining: number };
+
+async function readXml(zip: JSZip, path: string, budget: XmlBudget): Promise<XmlNode | null> {
   const entry = zip.file(path);
   if (!entry) return null;
-  return parser.parse(await entry.async('string')) as XmlNode;
+  const xml = await new Promise<string>((resolve, reject) => {
+    // JSZip's browser stream API exists at runtime, but its TypeScript
+    // declarations expose only the eager async() and Node-only nodeStream().
+    // Use a small local interface so decompression can be interrupted early.
+    interface ZipStream {
+      on(event: 'data', cb: (chunk: Uint8Array) => void): ZipStream;
+      on(event: 'error', cb: (error: Error) => void): ZipStream;
+      on(event: 'end', cb: () => void): ZipStream;
+      pause(): void;
+      resume(): void;
+    }
+    const stream = (
+      entry as JSZip.JSZipObject & { internalStream(type: 'uint8array'): ZipStream }
+    ).internalStream('uint8array');
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    const parts: string[] = [];
+    let size = 0;
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      stream.pause();
+      reject(error);
+    };
+    stream.on('data', (chunk: Uint8Array) => {
+      if (settled) return;
+      size += chunk.byteLength;
+      budget.remaining -= chunk.byteLength;
+      if (size > MAX_XML_ENTRY_BYTES || budget.remaining < 0) {
+        fail(new Error('Spreadsheet XML exceeds the safe decompressed-size limit'));
+        return;
+      }
+      try {
+        parts.push(decoder.decode(chunk, { stream: true }));
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    stream.on('error', (error: Error) => fail(error));
+    stream.on('end', () => {
+      if (settled) return;
+      try {
+        parts.push(decoder.decode());
+        settled = true;
+        resolve(parts.join(''));
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    stream.resume();
+  });
+  return parser.parse(xml) as XmlNode;
 }
 
 function resolveTarget(base: string, target: string): string {
@@ -80,11 +137,12 @@ function resolveTarget(base: string, target: string): string {
 async function relationships(
   zip: JSZip,
   partPath: string,
+  budget: XmlBudget,
 ): Promise<{ id: string; type: string; target: string }[]> {
   const dir = partPath.split('/').slice(0, -1).join('/');
   const name = partPath.split('/').pop();
   const relsPath = `${dir ? `${dir}/` : ''}_rels/${name}.rels`;
-  const rels = await readXml(zip, relsPath);
+  const rels = await readXml(zip, relsPath, budget);
   const list =
     ((rels?.Relationships as XmlNode | undefined)?.Relationship as XmlNode[] | undefined) ?? [];
   return list.map((rel) => ({
@@ -109,10 +167,14 @@ function isDateFormat(code: string): boolean {
   return /[dmyhs]/i.test(stripped) && !/^general$/i.test(stripped.trim());
 }
 
-async function dateStyles(zip: JSZip, stylesPath: string | undefined): Promise<Set<number>> {
+async function dateStyles(
+  zip: JSZip,
+  stylesPath: string | undefined,
+  budget: XmlBudget,
+): Promise<Set<number>> {
   const dated = new Set<number>();
   if (!stylesPath) return dated;
-  const styles = (await readXml(zip, stylesPath))?.styleSheet as XmlNode | undefined;
+  const styles = (await readXml(zip, stylesPath, budget))?.styleSheet as XmlNode | undefined;
   if (!styles) return dated;
 
   const custom = new Map<number, string>();
@@ -161,8 +223,10 @@ function excelNumber(raw: string): number {
   return Number.isFinite(n) ? Number(n.toPrecision(15)) : n;
 }
 
-// Every sheet, not just the first; converters pick which one they want.
-const MAX_CELLS = 5_000_000;
+// Bound materialised *rectangular* cells, not just non-empty entries.
+// A two-cell XFD1048576 workbook must never allocate 17 billion slots.
+const MAX_CELLS = 1_000_000;
+const MAX_ROWS = 100_000;
 
 export async function readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Sheet[]> {
   let zip: JSZip;
@@ -174,13 +238,14 @@ export async function readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Shee
     );
   }
 
-  const rootRels = await relationships(zip, '');
+  const budget: XmlBudget = { remaining: MAX_XML_TOTAL_BYTES };
+  const rootRels = await relationships(zip, '', budget);
   const workbookPath =
     rootRels.find((rel) => rel.type.endsWith('/officeDocument'))?.target ?? 'xl/workbook.xml';
-  const workbook = (await readXml(zip, workbookPath))?.workbook as XmlNode | undefined;
+  const workbook = (await readXml(zip, workbookPath, budget))?.workbook as XmlNode | undefined;
   if (!workbook) throw new Error('Not a valid .xlsx file (no workbook part)');
 
-  const wbRels = await relationships(zip, workbookPath);
+  const wbRels = await relationships(zip, workbookPath, budget);
   const byId = new Map(wbRels.map((rel) => [rel.id, rel]));
   const sharedPath = wbRels.find((rel) => rel.type.endsWith('/sharedStrings'))?.target;
   const stylesPath = wbRels.find((rel) => rel.type.endsWith('/styles'))?.target;
@@ -188,24 +253,28 @@ export async function readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Shee
   const date1904Attr = (workbook.workbookPr as XmlNode | undefined)?.['@_date1904'];
   const date1904 = date1904Attr === 'true' || date1904Attr === '1';
 
-  const sst = sharedPath ? (await readXml(zip, sharedPath))?.sst : undefined;
+  const sst = sharedPath ? (await readXml(zip, sharedPath, budget))?.sst : undefined;
   const shared = (((sst as XmlNode | undefined)?.si as unknown[]) ?? []).map(stringItem);
-  const dated = await dateStyles(zip, stylesPath);
+  const dated = await dateStyles(zip, stylesPath, budget);
 
   const sheetNodes =
     ((workbook.sheets as XmlNode | undefined)?.sheet as XmlNode[] | undefined) ?? [];
   const sheets: Sheet[] = [];
   let cellBudget = MAX_CELLS;
+  let gridBudget = MAX_CELLS;
 
   for (const sheetNode of sheetNodes) {
     const rel = byId.get(String(sheetNode['@_id'] ?? ''));
     // Chartsheets and dialog sheets have no cell grid.
     if (!rel || !rel.type.endsWith('/worksheet')) continue;
-    const worksheet = (await readXml(zip, rel.target))?.worksheet as XmlNode | undefined;
+    const worksheet = (await readXml(zip, rel.target, budget))?.worksheet as XmlNode | undefined;
     const rowNodes =
       ((worksheet?.sheetData as XmlNode | undefined)?.row as XmlNode[] | undefined) ?? [];
 
     const rows: CellValue[][] = [];
+    let sheetHeight = 0;
+    let sheetWidth = 0;
+    let sheetSlots = 0;
     let nextRow = 0;
     for (const rowNode of rowNodes) {
       const r = rowNode['@_r'] !== undefined ? Number(rowNode['@_r']) - 1 : nextRow;
@@ -216,11 +285,28 @@ export async function readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Shee
         const col = ref ? columnIndex(ref) : nextCol;
         const cellRow = ref && rowIndex(ref) >= 0 ? rowIndex(ref) : r;
         nextCol = col + 1;
+        if (!Number.isSafeInteger(col) || !Number.isSafeInteger(cellRow)) continue;
         if (col < 0 || col > 16_383 || cellRow < 0 || cellRow > 1_048_575) continue;
 
         const value = decodeCell(cell, shared, dated, date1904);
         if (value === null) continue;
-        if (--cellBudget < 0) throw new Error('Spreadsheet is too large to convert in the browser');
+        const requiredHeight = Math.max(sheetHeight, cellRow + 1);
+        const requiredWidth = Math.max(sheetWidth, col + 1);
+        const requiredSlots = requiredHeight * requiredWidth;
+        const extraSlots = requiredSlots - sheetSlots;
+        // Check BEFORE extending arrays, including the final rectangular padding.
+        if (
+          requiredHeight > MAX_ROWS ||
+          requiredSlots > MAX_CELLS ||
+          extraSlots > gridBudget ||
+          --cellBudget < 0
+        ) {
+          throw new Error('Spreadsheet is too large to convert safely in the browser');
+        }
+        gridBudget -= extraSlots;
+        sheetHeight = requiredHeight;
+        sheetWidth = requiredWidth;
+        sheetSlots = requiredSlots;
         while (rows.length <= cellRow) rows.push([]);
         const row = rows[cellRow];
         while (row.length < col) row.push(null);

@@ -163,10 +163,38 @@ async function navigate(request) {
 // go into the share inbox cache, and the page picks them up from there
 // (app/components/ConverterApp.tsx, ?shared=1) and empties it.
 const SHARE_INBOX = 'share-inbox';
+const MAX_SHARE_FILES = 10;
+const MAX_SHARE_BYTES = 50 * 1024 * 1024;
+const SHARE_TTL_MS = 15 * 60 * 1000;
+
+async function purgeOldShares(inbox) {
+  const now = Date.now();
+  for (const request of await inbox.keys()) {
+    const id = new URL(request.url).pathname.split('/').pop() || '';
+    const created = Number(id.split('-')[0]);
+    if (!Number.isFinite(created) || created <= 0 || now - created > SHARE_TTL_MS) {
+      await inbox.delete(request);
+    }
+  }
+}
 
 async function receiveShare(request) {
+  // Content-Length is not guaranteed, but reject known oversized requests
+  // before formData() materialises their contents.
+  const declared = Number(request.headers.get('content-length') || 0);
+  if (declared > MAX_SHARE_BYTES + 128 * 1024) {
+    return new Response('Share exceeds 50 MiB', { status: 413 });
+  }
   const form = await request.formData();
+  const files = form.getAll('files').filter((f) => typeof f !== 'string' && f.size > 0);
+  if (
+    files.length > MAX_SHARE_FILES ||
+    files.reduce((total, f) => total + f.size, 0) > MAX_SHARE_BYTES
+  ) {
+    return new Response('Share exceeds size or file-count limit', { status: 413 });
+  }
   const inbox = await caches.open(SHARE_INBOX);
+  await purgeOldShares(inbox);
   let n = 0;
   const keep = (blob, name) =>
     inbox.put(
@@ -178,7 +206,6 @@ async function receiveShare(request) {
         },
       }),
     );
-  const files = form.getAll('files').filter((f) => typeof f !== 'string' && f.size > 0);
   for (const file of files) await keep(file, file.name);
   if (!files.length) {
     const text = [form.get('title'), form.get('text'), form.get('url')]

@@ -39,7 +39,7 @@ const settle = (page) => page.waitForTimeout(700); // framer-motion enter animat
 const browser = await chromium.launch(launch);
 try {
   for (const theme of ['dark', 'light']) {
-    const context = await browser.newContext({ colorScheme: theme });
+    const context = await browser.newContext({ colorScheme: theme, locale: 'en-US' });
     const page = await context.newPage();
     await page.goto(APP, { waitUntil: 'networkidle' });
     await settle(page);

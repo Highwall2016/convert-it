@@ -160,7 +160,7 @@ const engineOf = (label) =>
   label.startsWith('ffmpeg') ? 'ffmpeg' : label.startsWith('webcodecs') ? 'webcodecs' : null;
 
 for (const [fixture, target, label, check] of PAIRS) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'en-US' });
   const consoleErrors = [];
   page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
   // The loader warns when it gives up on the multi-threaded FFmpeg core.
@@ -279,7 +279,7 @@ for (const [fixture, target, label, check] of PAIRS) {
 // in list order, must come back as one PDF with a page each.
 {
   const row = { pair: 'pdf+png+pdf', label: 'merge into PDF', ok: false, note: '' };
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'en-US' });
   try {
     await page.goto(APP, { waitUntil: 'networkidle' });
     await page.setInputFiles(
@@ -311,7 +311,7 @@ for (const [fixture, target, label, check] of PAIRS) {
 {
   const BUDGET = { card: 1000, convert: 2000 };
   const row = { pair: 'png → webp', label: 'cold, timed', ok: false, note: '' };
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'en-US' });
   try {
     await page.goto(APP, { waitUntil: 'networkidle' });
     let start = Date.now();
