@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, security/harden-file-converters]
 
 permissions:
   contents: read
@@ -102,12 +102,5 @@ jobs:
           # which it stops to go offline for real.
           node scripts/offline-smoke.mjs
 
-      # The Pages project is direct-upload (no Git integration), so main is
-      # deployed from the artifact this job just built and verified.
-      - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_CLOUDFLARE_DEPLOY == 'true'
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name convert-it --branch main
+      # Cloudflare Pages Git integration builds the reviewed staging branch.
+      # Do not deploy this same build through a second credential-bearing CI path.

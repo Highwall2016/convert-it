@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const base = process.argv[2];
-const ORIGIN = process.env.CONVERT_IT_ORIGIN ?? 'https://convert-it.pages.dev';
+const ORIGIN = process.env.CONVERT_IT_ORIGIN ?? 'https://convert-it-8wh.pages.dev';
 const CDN = 'convert-assets.highwall-lab.us.ci';
 
 if (!base || !base.startsWith('https://') || new URL(base).hostname !== CDN) {

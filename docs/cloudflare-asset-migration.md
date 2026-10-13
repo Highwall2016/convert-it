@@ -8,7 +8,7 @@ Updated 2026-10-13. This is a hardened fork; do not use the upstream publisher's
 | ----------------------------- | --------------------------------------------------------------- |
 | R2 bucket                     | `convert-it-assets-highwall` (APAC, Standard)                   |
 | Public R2 hostname            | `convert-assets.highwall-lab.us.ci`                             |
-| Intended Pages hostname       | `convert-it.pages.dev` (staging)                                |
+| Intended Pages hostname       | `convert-it-8wh.pages.dev` (staging)                            |
 | Reserved user-facing hostname | `convert.highwall-lab.us.ci`                                    |
 | ST asset base                 | `https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10` |
 | CORS configuration            | `r2-cors.json`                                                  |
@@ -29,7 +29,7 @@ The source was checked before upload; downloaded R2 objects independently match 
 node scripts/check-ffmpeg-st.mjs https://convert-assets.highwall-lab.us.ci/ffmpeg-core/0.12.10
 ```
 
-The check fetches objects via HTTPS, asserts their SHA-256 and verifies R2 CORS for `https://convert-it.pages.dev`. Browser FFmpeg loading independently re-hashes content at runtime.
+The check fetches objects via HTTPS, asserts their SHA-256 and verifies R2 CORS for `https://convert-it-8wh.pages.dev`. Browser FFmpeg loading independently re-hashes content at runtime.
 
 ## Operational guardrails
 
@@ -38,5 +38,5 @@ The check fetches objects via HTTPS, asserts their SHA-256 and verifies R2 CORS 
 - Do not enable multi-threaded FFmpeg until all three objects match their pinned hashes and COOP/COEP plus CORS are verified.
 - Avoid creating buckets, cache policies, or public URLs for user documents: file conversion should remain **browser-only**, with no upload service.
 - Validate staging Pages output, CSP, CORS, browser egress and offline PWA before assigning the production custom domain.
-- Keep direct-upload Github deploy secrets disabled when using native Cloudflare Pages Git integration; do not have two independent release channels.
+- Pages now uses native Git integration, with production_branch=feat/cloudflare-owned-ffmpeg only for staging. The former GitHub token-based deployment step is removed, preventing duplicate release channels. Use reviewed main after merging both security PRs.
 - Restrict production deployments to reviewed, CI-passing commits, and retain rollback procedure.
