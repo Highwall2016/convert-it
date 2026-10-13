@@ -27,6 +27,11 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
+      # Detect accidental public exposure of the site or historic deployment
+      # URLs. No credentials: every anonymous request must hit Access first.
+      - name: Verify owner-only Cloudflare Access gate
+        run: npm run test:access
+
       - run: npm run typecheck
 
       - run: npm run lint
